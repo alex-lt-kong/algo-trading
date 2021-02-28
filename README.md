@@ -1,2 +1,2 @@
 # algo-trading
-test
+Implemented a few common algorithmic trading strategies.
