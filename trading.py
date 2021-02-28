@@ -93,12 +93,54 @@ class rsi_simple_28(Strategy):
             self.sell()
 
 
-class sma_cross(Strategy):
+class ema_cross(Strategy):
+    # Appears to me that ema performs constantly better than sma
+    # no matter if it is in a bear or a bull market.
+    # span1 == 10 and span2 == 20 appears to be the best among 3 combinations
+    # tested
+
+    span1 = 10
+    span2 = 20
 
     def init(self):
+
         Close1 = self.data.Close
-        self.ma1 = self.I(func=SMA, arr=Close1, n=10)
-        self.ma2 = self.I(func=SMA, arr=Close1, n=20)
+        self.ma1 = self.I(func=self.ema, values=Close1, n=self.span1)
+        self.ma2 = self.I(func=self.ema, values=Close1, n=self.span2)
+        # Declare indicator. An indicator is just an array of values,
+        # but one that is revealed gradually in Strategy.next() much like
+        # Strategy.data is. Returns np.ndarray of indicator values.
+        # https://kernc.github.io/backtesting.py/doc/backtesting/backtesting.html#backtesting.backtesting.Strategy.
+
+        # SMA(): Returns n-period simple moving average of array arr.
+
+    def next(self):
+        # If mal crosses above ma2 , buy the asset
+        if crossover(series1=self.ma1, series2=self.ma2):
+            # Return True if series1 just crossed over series2.
+            # https://kernc.github.io/backtesting.py/doc/backtesting/lib.html
+            self.buy()
+            # https://kernc.github.io/backtesting.py/doc/backtesting/backtesting.html
+        # Else , if mal crosses below ma2 , sell it
+        elif crossover(series1=self.ma2, series2=self.ma1):
+            self.sell()
+
+    def ema(self, values, n):
+
+        return pd.Series(values).ewm(span=n).mean()
+        # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Series.ewm.html
+
+class sma_cross(Strategy):
+    # Strategy is BaseClassName
+
+    period1 = 10
+    period2 = 20
+
+    def init(self):
+
+        Close1 = self.data.Close
+        self.ma1 = self.I(func=SMA, arr=Close1, n=self.period1)
+        self.ma2 = self.I(func=SMA, arr=Close1, n=self.period2)
         # Declare indicator. An indicator is just an array of values,
         # but one that is revealed gradually in Strategy.next() much like
         # Strategy.data is. Returns np.ndarray of indicator values.
@@ -138,6 +180,7 @@ def draw_moving_average(df, ticker: str,company_name: str):
 #    ax =
     plt.show()
 
+
 def main():
 
 
@@ -145,24 +188,34 @@ def main():
     #draw_moving_average(df, 'IBM', 'IBM')
 
 
-    df = web.DataReader('IBM', 'yahoo', dt.date(2012, 1, 3), dt.date(2020, 12, 31))
+    df = web.DataReader('0001.hk', 'yahoo', dt.date(2010, 1, 1), dt.date(2020, 12, 31))
 
     print('\nStrategy I: Simple Moving Average Cross')
     bt_sma_cross = Backtest(data=df, strategy=sma_cross,
                             cash=10000, commission=0.002)
-    print(bt_sma_cross.run())
-    bt_sma_cross.plot()
+
+    para2 = [20, 500, 200]
+    for i in range(len(para2)):
+        print(bt_sma_cross.run(period1=10, period2=para2[i]))
+        bt_sma_cross.plot()
     # the plot cannot be shown if run in Spyder.
 
+    for i in range(len(para2)):
+        bt_ema_cross = Backtest(data=df, strategy=ema_cross,
+                                cash=10000, commission=0.002)
+        print(bt_ema_cross.run(span1=10, span2=para2[i]))
+        bt_ema_cross.plot()
+
     print('\nStrategy II: Simple Relative Strength Index')
-    bt_rsi_28 = Backtest(df, rsi_simple_28, cash = 10000, commission = 0.002)
+    bt_rsi_28 = Backtest(df, rsi_simple_28, cash=10000, commission=0.002)
     print(bt_rsi_28.run())
     bt_rsi_28.plot() # the plot cannot be shown if run in Spyder.
 
     print('\nStrategy III: Simple Relative Strength Index with stop orders')
     bt_rsi_28_close = Backtest(df, rsi_simple_28_close, cash = 10000, commission = 0.002)
     print(bt_rsi_28_close.run())
-    bt_rsi_28_close.plot() # the plot cannot be shown if run in Spyder.
+    bt_rsi_28_close.plot()
+    # the plot cannot be shown if run in Spyder.
 
 
 if __name__ == '__main__':
