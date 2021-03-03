@@ -9,20 +9,30 @@ import pandas as pd
 import pandas_datareader.data as web
 import matplotlib.pyplot as plt
 
-from backtesting import Backtest , Strategy
+from backtesting import Backtest, Strategy
 from backtesting.lib import crossover
 from backtesting.test import SMA
 
 
-def get_relative_strength_index(array, n):
+def rsi(array, n):
+# This function will only be called once for each instance.
 
     gain = pd.Series(array).diff()
     loss = gain.copy()
     gain[gain < 0] = 0
+    # in the gain series, if gain is negative, make it zero
     loss[loss > 0] = 0
-    rs = gain.rolling(n).mean() / loss.abs().rolling(n).mean()
+    # in the loss series if loss is positive, make it zero
 
+    #rs = gain.ewm(n).mean() / loss.abs().ewm(n).mean()
+    # ewm() -> apply EWMA
+    # ewm() appears to be unsuitable here since it could lead to a very high
+    # rsi in the very beginning of the period given the lack of previous data.
+    rs = gain.rolling(n).mean() / loss.abs().rolling(n).mean()
+    # rolling() -> apply SMA
     return 100 - 100 / (1 + rs)
+    # According to my understanding, this is operator overloading and the
+    # return value is a pd.Series.
 
 
 class rsi_ls_28_close(Strategy):
@@ -35,10 +45,10 @@ class rsi_ls_28_close(Strategy):
 
     def init(self):
         Close1 = self.data.Close
-        self.rsi_14 = self.I(get_relative_strength_index, Close1, self.ww_rsi)
+        self.rsi_14 = self.I(rsi, Close1, self.ww_rsi)
 
-        self.st_rsi = self.I(get_relative_strength_index, Close1, self.s_rsi)
-        self.lt_rsi = self.I(get_relative_strength_index, Close1, self.l_rsi)
+        self.st_rsi = self.I(rsi, Close1, self.s_rsi)
+        self.lt_rsi = self.I(rsi, Close1, self.l_rsi)
 
     def next(self):
         if not self.position:
@@ -53,7 +63,7 @@ class rsi_ls_28_close(Strategy):
                 self.position.close()
 
 
-class rsi_simple_28_close(Strategy):
+class rsi_simple_close(Strategy):
 
     ww_rsi = 14
     oversold_level = 20
@@ -61,7 +71,7 @@ class rsi_simple_28_close(Strategy):
 
     def init(self):
         Close1 = self.data.Close
-        self.rsi_14 = self.I(get_relative_strength_index, Close1, self.ww_rsi)
+        self.rsi_14 = self.I(rsi, Close1, self.ww_rsi)
 
     def next(self):
         if not self.position:
@@ -76,22 +86,22 @@ class rsi_simple_28_close(Strategy):
                 self.position.close()
 
 
-class rsi_simple_28(Strategy):
+class rsi_simple(Strategy):
 
     ww_rsi = 14
-    oversold_level = 20
-    overbought_level = 80
+    oversold_level = 30
+    overbought_level = 70
 
     def init(self):
         Close1 = self.data.Close
-        self.rsi_14 = self.I(get_relative_strength_index, Close1, self.ww_rsi)
+        self.rsi_14 = self.I(rsi, Close1, self.ww_rsi)
 
     def next(self):
         if self.rsi_14 < self.oversold_level:
-            self.buy()
+            result = self.buy()
         elif self.rsi_14 > self.overbought_level:
             self.sell()
-
+            print(result.size)
 
 class ema_cross(Strategy):
     # Appears to me that ema performs constantly better than sma
@@ -130,6 +140,7 @@ class ema_cross(Strategy):
         return pd.Series(values).ewm(span=n).mean()
         # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Series.ewm.html
 
+
 class sma_cross(Strategy):
     # Strategy is BaseClassName
 
@@ -160,23 +171,23 @@ class sma_cross(Strategy):
             self.sell()
 
 
-def draw_moving_average(df, ticker: str,company_name: str):
+def draw_moving_average(df, ticker: str, company_name: str):
 
     short_moving_avg = df.Close.rolling(window=20).mean()
     long_moving_avg = df.Close.rolling(window=20).mean()
 
     plt.subplots(figsize=(16, 9))
-    plt.plot(df.Close.index, df.Close, label='{} ({})'.format(company_name, ticker), alpha = 0.8)
-    plt.plot(short_moving_avg.index, short_moving_avg, label = '20-day MA')
-    plt.plot(long_moving_avg.index, long_moving_avg, label = '100-day MA')
+    plt.plot(df.Close.index, df.Close, label='{} ({})'.format(company_name, ticker), alpha=0.8)
+    plt.plot(short_moving_avg.index, short_moving_avg, label='20-day MA')
+    plt.plot(long_moving_avg.index, long_moving_avg, label='100-day MA')
 
     import numpy as np
     indicator = np.where(short_moving_avg > long_moving_avg, df['Close'].max() + 1, df['Close'].min() - 1)
-    plt.plot(df.Close.index, indicator, alpha = 0.3)
+    plt.plot(df.Close.index, indicator, alpha=0.3)
     #plt.plot(tsla)
     plt.xlabel('Date')
     plt.ylabel('Closing price ($)')
-    plt.legend(loc = 'lower right')
+    plt.legend(loc='lower right')
 #    ax =
     plt.show()
 
@@ -188,7 +199,8 @@ def main():
     #draw_moving_average(df, 'IBM', 'IBM')
 
 
-    df = web.DataReader('0001.hk', 'yahoo', dt.date(2010, 1, 1), dt.date(2020, 12, 31))
+    df = web.DataReader('0001.hk', 'yahoo',
+                        dt.date(2019, 1, 1), dt.date(2020, 12, 31))
 
     print('\nStrategy I: Simple Moving Average Cross')
     bt_sma_cross = Backtest(data=df, strategy=sma_cross,
@@ -200,19 +212,22 @@ def main():
         bt_sma_cross.plot()
     # the plot cannot be shown if run in Spyder.
 
+    print('\nStrategy II: Exponential Moving Average Cross')
     for i in range(len(para2)):
         bt_ema_cross = Backtest(data=df, strategy=ema_cross,
                                 cash=10000, commission=0.002)
         print(bt_ema_cross.run(span1=10, span2=para2[i]))
         bt_ema_cross.plot()
 
-    print('\nStrategy II: Simple Relative Strength Index')
-    bt_rsi_28 = Backtest(df, rsi_simple_28, cash=10000, commission=0.002)
+    print('\nStrategy III: Simple Relative Strength Index')
+    bt_rsi_28 = Backtest(df, rsi_simple, cash=10000, commission=0.002)
     print(bt_rsi_28.run())
-    bt_rsi_28.plot() # the plot cannot be shown if run in Spyder.
+    bt_rsi_28.plot()
+    # the plot cannot be shown if run in Spyder.
 
+    return
     print('\nStrategy III: Simple Relative Strength Index with stop orders')
-    bt_rsi_28_close = Backtest(df, rsi_simple_28_close, cash = 10000, commission = 0.002)
+    bt_rsi_28_close = Backtest(df, rsi_simple_close, cash=10000, commission=0.002)
     print(bt_rsi_28_close.run())
     bt_rsi_28_close.plot()
     # the plot cannot be shown if run in Spyder.
