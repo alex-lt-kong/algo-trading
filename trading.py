@@ -35,7 +35,7 @@ def rsi(array, n):
     # return value is a pd.Series.
 
 
-class rsi_ls_28_close(Strategy):
+class rsi_ls_close(Strategy):
 
     s_rsi = 6
     l_rsi = 24
@@ -98,10 +98,9 @@ class rsi_simple(Strategy):
 
     def next(self):
         if self.rsi_14 < self.oversold_level:
-            result = self.buy()
+            self.buy()
         elif self.rsi_14 > self.overbought_level:
             self.sell()
-            print(result.size)
 
 class ema_cross(Strategy):
     # Appears to me that ema performs constantly better than sma
@@ -194,10 +193,8 @@ def draw_moving_average(df, ticker: str, company_name: str):
 
 def main():
 
-
     #df = web.DataReader('IBM', 'yahoo', dt.date(2010, 1, 1), dt.date(2012, 1, 3))
     #draw_moving_average(df, 'IBM', 'IBM')
-
 
     df = web.DataReader('0001.hk', 'yahoo',
                         dt.date(2019, 1, 1), dt.date(2020, 12, 31))
@@ -220,17 +217,21 @@ def main():
         bt_ema_cross.plot()
 
     print('\nStrategy III: Simple Relative Strength Index')
-    bt_rsi_28 = Backtest(df, rsi_simple, cash=10000, commission=0.002)
-    print(bt_rsi_28.run())
-    bt_rsi_28.plot()
+    bt_rsi = Backtest(df, rsi_simple, cash=10000, commission=0.002)
+    print(bt_rsi.run())
+    bt_rsi.plot()
     # the plot cannot be shown if run in Spyder.
 
-    return
-    print('\nStrategy III: Simple Relative Strength Index with stop orders')
-    bt_rsi_28_close = Backtest(df, rsi_simple_close, cash=10000, commission=0.002)
-    print(bt_rsi_28_close.run())
-    bt_rsi_28_close.plot()
+    print('\nStrategy IV: Simple Relative Strength Index with stop orders')
+    bt_rsi_close = Backtest(df, rsi_simple_close, cash=10000, commission=0.002)
+    print(bt_rsi_close.run())
+    bt_rsi_close.plot()
     # the plot cannot be shown if run in Spyder.
+
+    print('\nStrategy V: Relative Strength Index with long/short-term')
+    bt_rsi_ls_close = Backtest(df, rsi_ls_close, cash=10000, commission=0.002)
+    print(bt_rsi_ls_close.run())
+    bt_rsi_ls_close.plot()
 
 
 if __name__ == '__main__':
